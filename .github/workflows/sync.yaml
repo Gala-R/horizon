@@ -3,8 +3,8 @@ name: 'Sync Upstream'
 on:
   
   schedule:
-    - cron: '0 0 * * *' # 每3小时触发, 对于一些更新不那么频繁的项目可以设置为每天一次, 低碳一点
-  workflow_dispatch:  # click the button on Github repo!
+    - cron: '0 0 * * *' # Synchronize upstream repository at 0:00 every day 
+  # workflow_dispatch:  # click the button on Github repo!
 
 jobs:
   sync_latest_from_upstream:
