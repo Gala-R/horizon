@@ -12,13 +12,13 @@ jobs:
     strategy:
       matrix:
         components: [core, job, swagger]
-        platforms: ['linux/amd64', 'linux/arm64']
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 20
       - uses: dorny/paths-filter@v2
+        if: ${{ !startsWith(github.ref_name, 'v') }}
         id: changes
         with:
           filters: |
@@ -50,10 +50,10 @@ jobs:
       - name: Condition
         id: condition
         run: |
-          echo "run=${{ (steps.changes.outputs.go == 'true' && (matrix.components == 'core' || matrix.components == 'job')) || (steps.changes.outputs.api == 'true' && matrix.components == 'swagger') }}" >> $GITHUB_OUTPUT
+          echo "run=${{ startsWith(github.ref_name, 'v') || ((steps.changes.outputs.go == 'true' && (matrix.components == 'core' || matrix.components == 'job')) || (steps.changes.outputs.api == 'true' && matrix.components == 'swagger')) }}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
-        if: ${{ matrix.platforms != 'linux/amd64' && steps.condition.outputs.run == 'true' }}
+        if: ${{ steps.condition.outputs.run == 'true' }}
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         if: ${{ steps.condition.outputs.run == 'true' }}
@@ -64,6 +64,6 @@ jobs:
         with:
           context: .
           file: ./build/${{ matrix.components }}/Dockerfile
-          platforms: ${{ matrix.platforms }}
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
