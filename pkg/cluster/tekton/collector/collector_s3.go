@@ -1,3 +1,17 @@
+// Copyright © 2023 Horizoncd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package collector
 
 import (
@@ -126,10 +140,16 @@ func (c *S3Collector) Collect(ctx context.Context, pr *v1beta1.PipelineRun, hori
 	if err != nil {
 		return nil, err
 	}
+
+	logutil.Debugf(ctx, "collected log result: logObject: %s, logURL: %s",
+		collectLogResult.LogObject, collectLogResult.LogURL)
+
 	collectObjectResult, err := c.collectObject(ctx, metadata, pr)
 	if err != nil {
 		return nil, err
 	}
+
+	logutil.Debugf(ctx, "collected object result: %+v", collectObjectResult)
 
 	logStruct := NewLogStruct(collectObjectResult.PrURL,
 		metadata, collectLogResult.LogURL, collectLogResult.LogContent)
@@ -158,6 +178,9 @@ func (c *S3Collector) Collect(ctx context.Context, pr *v1beta1.PipelineRun, hori
 		}
 		return nil, err
 	}
+
+	logutil.Debugf(ctx, "tekton pipelineRun is deleted successfully, ID: %v", horizonMetaData.PipelinerunID)
+
 	return collectResult, nil
 }
 
