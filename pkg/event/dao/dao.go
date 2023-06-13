@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	webhookmodels "github.com/horizoncd/horizon/pkg/webhook/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -29,12 +30,13 @@ import (
 )
 
 type DAO interface {
-	CreateEvent(ctx context.Context, event *models.Event) (*models.Event, error)
-	ListEvents(ctx context.Context, query *q.Query) ([]*models.Event, error)
+	CreateEvent(ctx context.Context, event ...*models.Event) ([]*models.Event, error)
+	List(ctx context.Context, query *q.Query) ([]*models.Event, error)
 	CreateOrUpdateCursor(ctx context.Context,
 		eventIndex *models.EventCursor) (*models.EventCursor, error)
 	GetCursor(ctx context.Context) (*models.EventCursor, error)
 	GetEvent(ctx context.Context, id uint) (*models.Event, error)
+	DeleteEvents(ctx context.Context, id ...uint) (int64, error)
 }
 
 type dao struct{ db *gorm.DB }
@@ -44,16 +46,16 @@ func NewDAO(db *gorm.DB) DAO {
 	return &dao{db: db}
 }
 
-func (d *dao) CreateEvent(ctx context.Context, event *models.Event) (*models.Event, error) {
-	if result := d.db.WithContext(ctx).Create(event); result.Error != nil {
+func (d *dao) CreateEvent(ctx context.Context, events ...*models.Event) ([]*models.Event, error) {
+	if result := d.db.WithContext(ctx).Create(events); result.Error != nil {
 		return nil, herrors.NewErrInsertFailed(herrors.EventInDB, result.Error.Error())
 	}
-	return event, nil
+	return events, nil
 }
 
-func (d *dao) ListEvents(ctx context.Context, query *q.Query) ([]*models.Event, error) {
+func (d *dao) List(ctx context.Context, query *q.Query) ([]*models.Event, error) {
 	var events []*models.Event
-	statement := d.db.WithContext(ctx).Order("id asc")
+	statement := d.db.WithContext(ctx).Debug().Order("id asc")
 	for k, v := range query.Keywords {
 		switch k {
 		case common.Offset:
@@ -69,9 +71,11 @@ func (d *dao) ListEvents(ctx context.Context, query *q.Query) ([]*models.Event, 
 			}
 			statement = statement.Limit(limit)
 		case common.StartID:
-			statement = statement.Where("id >= ?", v)
+			statement = statement.Where("id > ?", v)
 		case common.EndID:
 			statement = statement.Where("id <= ?", v)
+		case common.ReqID:
+			statement = statement.Where("req_id = ?", v)
 		}
 	}
 
@@ -110,7 +114,8 @@ func (d *dao) CreateOrUpdateCursor(ctx context.Context,
 
 func (d *dao) GetCursor(ctx context.Context) (*models.EventCursor, error) {
 	var eventIndex models.EventCursor
-	if result := d.db.First(&eventIndex); result.Error != nil {
+	statement := d.db.WithContext(ctx)
+	if result := statement.First(&eventIndex); result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, herrors.NewErrNotFound(herrors.EventCursorInDB,
 				result.Error.Error())
@@ -118,6 +123,25 @@ func (d *dao) GetCursor(ctx context.Context) (*models.EventCursor, error) {
 		return nil, herrors.NewErrGetFailed(herrors.EventCursorInDB, result.Error.Error())
 	}
 	return &eventIndex, nil
+}
+
+func (d *dao) DeleteEvents(ctx context.Context, ids ...uint) (int64, error) {
+	var events []*models.Event
+	tx := d.db.WithContext(ctx).Begin()
+
+	result := tx.Where("id in (?)", ids).Delete(&events)
+	if result.Error != nil {
+		tx.Rollback()
+		return 0, herrors.NewErrDeleteFailed(herrors.EventInDB, result.Error.Error())
+	}
+
+	if result := tx.Where("event_id in (?)", ids).Delete(&webhookmodels.WebhookLog{}); result.Error != nil {
+		tx.Rollback()
+		return 0, herrors.NewErrDeleteFailed(herrors.WebhookLogInDB, result.Error.Error())
+	}
+
+	tx.Commit()
+	return result.RowsAffected, nil
 }
 
 // TODO: must add gc

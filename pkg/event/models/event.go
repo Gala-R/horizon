@@ -36,6 +36,8 @@ const (
 	ClusterPodsRescheduled string = "clusters_rescheduled"
 	ClusterUpdated         string = "clusters_updated"
 	ClusterFreed           string = "clusters_freed"
+	ClusterKubernetesEvent string = "clusters_kubernetes_event"
+	ClusterAction                 = "clusters_action"
 	// TODO: add group events
 )
 
